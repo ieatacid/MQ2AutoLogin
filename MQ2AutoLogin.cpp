@@ -118,6 +118,13 @@ _ServerData ServerData[] = {
     {0, 0},
 };
 
+struct loginData {
+    char stationName[64];
+    char password[64];
+    char server[32];
+    char character[64];
+};
+
 CSidlManager *pSidlManager = 0;
 PCXWNDMGR pWindowManager = 0;
 class CLoginViewManager *pLoginViewManager = 0;
@@ -129,6 +136,7 @@ DWORD dwLoginClient = 0;
 DWORD dwServerID = 0;
 UINT bKickActiveChar = 1;
 UINT bUseStationNamesInsteadOfSessions = false;
+UINT bCheckForOfflineCharacters = false;
 bool bLogin = false;
 bool bInGame = false;
 bool bSwitchServer = false;
@@ -139,7 +147,9 @@ char szCharacterName[64] = {0};
 char szNewChar[0x40] = {0};
 DWORD dwTime = 0;
 map<string, class CXWnd2 *> WindowMap;
-
+map<string, loginData*> iniMap;
+map<string, bool> charMap;
+map<string, loginData*>::iterator iniMapIterator;
 
 // this changes frequently so it needs to be done this way
 #define pLoginClient ((CLoginClient*)*(DWORD*)dwLoginClient)
@@ -156,7 +166,9 @@ void DebugLog(char *szFormat, ...);
 unsigned long _FindPattern(unsigned long dwAddress,unsigned long dwLen,unsigned char *bPattern,char * szMask);
 unsigned long _GetDWordAt(unsigned long address, unsigned long numBytes);
 unsigned long _GetFunctionAddressAt(unsigned long address, unsigned long addressOffset, unsigned long numBytes);
-
+bool getCharacters();
+bool getIniFileData();
+loginData *getFirstOfflineCharacter();
 
 PBYTE eqmainPattern = (PBYTE)"\x8B\x0D\x00\x00\x00\x00\x68\x00\x00\x00\x00\x51\xFF\xD6\xA3\x00\x00\x00\x00\x85\xC0\x75\x00\xFF\x15\x00\x00\x00\x00\x50\x68\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x83\xC4\x00\x33\xC0\x5E\xC3";
 char eqmainMask[] = "xx????x????xxxx????xxx?xx????xx????x????xx?xxxx";
@@ -527,6 +539,7 @@ PLUGIN_API VOID InitializePlugin(VOID)
 
     bKickActiveChar = GetPrivateProfileInt("Settings", "KickActiveCharacter", 1, INIFileName);
     bUseStationNamesInsteadOfSessions = GetPrivateProfileInt("Settings", "UseStationNamesInsteadOfSessions", 0, INIFileName);
+    bCheckForOfflineCharacters = GetPrivateProfileInt("Settings", "CheckForOfflineCharacters", 0, INIFileName);
 
 #ifdef AUTOLOGIN_DBG
     remove(DBG_LOGFILE_PATH);
@@ -565,8 +578,24 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
             AutoLoginDebug("SetGameState(GAMESTATE_PRECHARSELECT): !bInGame");
             DWORD nProcs = GetProcessCount("eqgame.exe");
             AutoLoginDebug("SetGameState(GAMESTATE_PRECHARSELECT) nProcs=%d", nProcs);
-
-            if(!bUseStationNamesInsteadOfSessions)
+            if(bCheckForOfflineCharacters && nProcs > 1)
+            {
+                AutoLoginDebug("SetGameState bCheckForOfflineCharacters=true");
+                if(getIniFileData() && getCharacters())
+                {
+                    AutoLoginDebug("SetGameState getIniFileData() && getCharacters() success");
+                    loginData *ld = getFirstOfflineCharacter();
+                    if(ld)
+                    {
+                        strcpy(szStationName, ld->stationName);
+                        strcpy(szPassword, ld->password);
+                        strcpy(szServerName, ld->server);
+                        strcpy(szCharacterName, ld->character);
+                        AutoLoginDebug("SetGameState getFirstOfflineCharacter() success, szCharName=%s", szCharacterName);
+                    }
+                }
+            }
+            else if(!bUseStationNamesInsteadOfSessions)
             {
                 char szSession[32];
                 
@@ -607,7 +636,7 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
                 if(szCharacterName[0])
                 {
                     Sleep(1000);
-                    AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): logging in");
+                    AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): logging in to '%s'", szCharacterName);
                     SwitchCharacter(szCharacterName);
                 }
                 else
@@ -616,7 +645,7 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
         }
         else if(szNewChar[0] && !dwTime)
         {
-            AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): calling SwitchCharacter");
+            AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): calling SwitchCharacter(%s)", szNewChar);
             SwitchCharacter(szNewChar);
             szNewChar[0] = 0;
         }
@@ -644,7 +673,9 @@ bool FindCharacter(char *szName)
         DWORD x = *(DWORD*)(((char*)pEverQuest)+0x38E6C);
         DWORD i = 0;
         do
-        { 
+        {
+            AutoLoginDebug("charname %s", ((PSPAWNINFO)pCharSpawn)->Name);
+            
             if(!stricmp(((PSPAWNINFO)pCharSpawn)->Name, szName))
                 return true;
 
@@ -941,6 +972,181 @@ inline void LoginReset()
     pWindowManager = 0;
     pLoginViewManager = 0;
     WindowMap.clear();
+    if(bCheckForOfflineCharacters)
+    {
+        iniMap.clear();
+        charMap.clear();
+    }
+}
+
+bool getIniFileData()
+{
+    char szSections[1024] = {0};
+    char szCharName[64] = {0};
+    char szTemp[64] = {0};
+    iniMap.clear();
+
+    char *pSection = szSections;
+    GetPrivateProfileSectionNames(szSections, 1024, INIFileName);
+    while(*pSection)
+    {
+        loginData ldTemp;
+        ZeroMemory(&ldTemp, sizeof(loginData));
+        AutoLoginDebug("section: %s", pSection);
+        if(!bUseStationNamesInsteadOfSessions)
+        {
+            if(strnicmp(pSection, "Session", 7))
+            {
+                pSection = pSection + strlen(pSection) + 1;
+                continue;
+            }
+            if(!GetPrivateProfileString(pSection, "StationName", "", szTemp, 64, INIFileName))
+            {
+                AutoLoginDebug("getIniFileData ERROR1");
+                return false;
+            }
+            strcpy(ldTemp.stationName, szTemp);
+        }
+        else
+        {
+            strcpy(ldTemp.stationName, pSection);
+        }
+
+        if(!GetPrivateProfileString(pSection, "Character", "", szCharName, 64, INIFileName))
+        {
+            AutoLoginDebug("getIniFileData ERROR2");
+            return false;
+        }
+
+        if(!GetPrivateProfileString(pSection, "Server", "", szTemp, 32, INIFileName))
+        {
+            AutoLoginDebug("getIniFileData ERROR3");
+            return false;
+        }
+        strcpy(ldTemp.server, szTemp);
+
+        if(!GetPrivateProfileString(pSection, "Password", "", szTemp, 64, INIFileName))
+        {
+            AutoLoginDebug("getIniFileData ERROR4");
+            return false;
+        }
+        strcpy(ldTemp.password, szTemp);
+        AutoLoginDebug("getIniFileData() adding %s", pSection);
+        loginData *ld = new loginData;
+        memcpy(ld, &ldTemp, sizeof(loginData));
+        strcpy(ld->character, szCharName);
+        iniMap[pSection] = ld;
+
+        pSection = pSection + strlen(pSection) + 1;
+    }
+    return true;
+}
+
+BOOL SetPrivilege(HANDLE hProc, LPCTSTR lpszPrivilege, BOOL bEnablePrivilege) 
+{
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
+    HANDLE hToken;
+
+    if(!OpenProcessToken(hProc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken ))
+    {
+        AutoLoginDebug("OpenProcessToken error: %u", GetLastError());
+        return FALSE;
+    }
+
+    if(!LookupPrivilegeValue(NULL, lpszPrivilege, &luid ))
+    {
+        AutoLoginDebug("LookupPrivilegeValue error: %u\n", GetLastError() );
+        CloseHandle(hToken);
+        return FALSE; 
+    }
+
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    if (bEnablePrivilege)
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    else
+        tp.Privileges[0].Attributes = 0;
+
+    if(!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), (PTOKEN_PRIVILEGES) NULL, (PDWORD) NULL))
+    { 
+        AutoLoginDebug("AdjustTokenPrivileges error: %u\n", GetLastError());
+        CloseHandle(hToken);
+        return FALSE; 
+    } 
+
+    CloseHandle(hToken);
+    return TRUE;
+}
+
+void ReadProcessString(HANDLE hProcess, DWORD lpAddress, char* buf, int len)
+{
+    DWORD oldprot, dummy = 0;
+    VirtualProtectEx(hProcess, (void*) lpAddress, len, PAGE_READWRITE, &oldprot);
+    ReadProcessMemory(hProcess, (char*) lpAddress, buf, len, 0);
+    VirtualProtectEx(hProcess, (void*) lpAddress, len, oldprot, &dummy);
+}
+
+bool getCharacters()
+{
+    HANDLE hnd = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32 proc;
+    proc.dwSize = sizeof(PROCESSENTRY32);
+    charMap.clear();
+
+    SetPrivilege(GetCurrentProcess(), SE_DEBUG_NAME, TRUE);
+
+    if(Process32First(hnd, &proc))
+    {
+        do
+        {
+            if(!stricmp(proc.szExeFile, "eqgame.exe"))
+            {
+                HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, proc.th32ProcessID);
+                //AutoLoginDebug("hProcess=%x", (DWORD)hProcess);
+                if(hProcess != GetCurrentProcess())
+                {
+                    char sLoginName[0x40] = {0};
+                    ReadProcessString(hProcess, instEQZoneInfo, sLoginName, 0x40);
+                    if(sLoginName[0])
+                    {
+                        AutoLoginDebug("getCharacters() adding character %s", sLoginName);
+                        charMap[sLoginName] = true;
+                    }
+                }
+                else
+                {
+                    AutoLoginDebug("getCharacters() hProcess == GetCurrentProcess()");
+                }
+                CloseHandle(hProcess);
+
+            }
+        }
+        while(Process32Next(hnd, &proc));
+    }
+
+    SetPrivilege(GetCurrentProcess(), SE_DEBUG_NAME, FALSE);
+    CloseHandle(hnd);
+
+    if(charMap.size() > 0)
+        return true;
+    return false;
+}
+
+loginData *getFirstOfflineCharacter()
+{
+    for(iniMapIterator = iniMap.begin(); iniMapIterator != iniMap.end(); iniMapIterator++)
+    {
+        AutoLoginDebug("getFirstOfflineCharacter() %s %s %d", iniMapIterator->first.c_str(), iniMapIterator->second->character, (DWORD)charMap[iniMapIterator->first]);
+        string s = iniMapIterator->second->character;
+        if(!charMap[s])
+        {
+            AutoLoginDebug("getFirstOfflineCharacter() found login data");
+            return iniMapIterator->second;
+        }
+    }
+    AutoLoginDebug("getFirstOfflineCharacter() returning 0");
+    return 0;
 }
 
 #ifdef AUTOLOGIN_DBG
