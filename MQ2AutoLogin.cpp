@@ -81,7 +81,7 @@ PreSetup("MQ2AutoLogin");
 
 
 /*** un-comment to enable debug logging ***/
-#define AUTOLOGIN_DBG
+//#define AUTOLOGIN_DBG
 
 /*** this can be changed ***/
 #define DBG_LOGFILE_PATH "c:\\MQ2AutoLogin_dbg.txt"
