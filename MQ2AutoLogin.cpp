@@ -14,6 +14,9 @@ GNU General Public License for more details.
 
 
 Change log:
+#  20121111
+- Updated for latest patch
+
 #  20121101
 - Added vox and trakanon servers
 
