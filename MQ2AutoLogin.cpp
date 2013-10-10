@@ -12,6 +12,13 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
+Change log:
+#  20131009 - ieatacid
+- Added 'test' to server list, per request
+
+#  20131004 - eqmule
+- Updated for latest patch
+- Had to change the MAX_WINDOWS or we would get caught in a loop...
 
 Change log:
 #  20121111
@@ -52,7 +59,7 @@ Change log:
 - The plugin will now click through the seizure warning screen
 
 #  20091112
-- Fixed for November 11th patch 
+- Fixed for November 11th patch
 
 #  20090908
 - Made some adjustments that speed up logging in
@@ -70,7 +77,7 @@ Change log:
 - Integrated MQ2SwitchChar
 
 # 20090831
-- Initial release 
+- Initial release
 ******************************************************************************/
 
 
@@ -78,7 +85,8 @@ Change log:
 #include <map>
 #include <tlhelp32.h>
 PreSetup("MQ2AutoLogin");
-
+#define CurrCharSelectChar 0x38E6C // see 42F530                 cmp     eax, [ecx+38E6Ch] in eqgame.exe dated oct 4 2013
+#define MAX_WINDOWS 150 // had to lower this for CotF patch it never reaches 200...
 
 /*** un-comment to enable debug logging ***/
 //#define AUTOLOGIN_DBG
@@ -118,6 +126,7 @@ _ServerData ServerData[] = {
     {"tunare",      57},
     {"xegony",      51},
     {"zek",         54},
+    {"test",         1},
     {0, 0},
 };
 
@@ -336,7 +345,7 @@ DWORD WINAPI LoginThread(LPVOID lpParam)
             AutoLoginDebug("bLogin loop: waiting for window data");
 
             // wait for window data to be populated
-            while(!pWindowManager->pWindows || pWindowManager->Count < 200)
+            while(!pWindowManager->pWindows || pWindowManager->Count < MAX_WINDOWS)
                 Sleep(100);
 
             CHAR Name[MAX_STRING]={0};
@@ -346,7 +355,7 @@ DWORD WINAPI LoginThread(LPVOID lpParam)
 
             while(pWnd = *ppWnd)
             {
-                if(count-- == 0) 
+                if(count-- == 0)
                     break;
 
                 if(CXMLData *pXMLData=((CXWnd2*)pWnd)->GetXMLData())
@@ -423,7 +432,7 @@ void Cmd_SwitchServer(PSPAWNINFO pChar, char *szLine)
                     strcat(szServers, ", ");
                 strcat(szServers, ServerData[n].Name);
             }
-            
+           
             WriteChatColor(szServers);
             return;
         }
@@ -572,7 +581,7 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
             if(!bUseStationNamesInsteadOfSessions)
             {
                 char szSession[32];
-                
+               
                 sprintf(szSession, "Session%d", nProcs);
                 AutoLoginDebug(szSession);
 
@@ -604,9 +613,9 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
             else // server select -> char select
             {
                 AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): bSwitchServer = false");
-                
+               
                 dwServerID = 0;
-                
+               
                 if(szCharacterName[0])
                 {
                     Sleep(1000);
@@ -644,10 +653,10 @@ bool FindCharacter(char *szName)
 {
     if(pCharSpawn && ((PSPAWNINFO)pCharSpawn)->Name[0])
     {
-        DWORD x = *(DWORD*)(((char*)pEverQuest)+0x38E6C);
+        DWORD x = *(DWORD*)(((char*)pEverQuest)+CurrCharSelectChar);
         DWORD i = 0;
         do
-        { 
+        {
             if(!stricmp(((PSPAWNINFO)pCharSpawn)->Name, szName))
                 return true;
 
@@ -742,7 +751,7 @@ void HandleWindows()
                     return;
                 }
             }
-            
+           
             if(!szStationName[0] || !szPassword[0] || !szServerName[0])
             {
                 AutoLoginDebug("*** Login data couldn't be retrieved.  Please check your ini file.");
@@ -949,24 +958,24 @@ inline void LoginReset()
 #ifdef AUTOLOGIN_DBG
 void DebugLog(char *szFormat, ...)
 {
-	char szOutput[512] = {0};
+   char szOutput[512] = {0};
     char szTmp[512] = {0};
     va_list vaList;
 
-	if(FILE *fLog = fopen(DBG_LOGFILE_PATH, "a"))
-	{
+   if(FILE *fLog = fopen(DBG_LOGFILE_PATH, "a"))
+   {
         va_start(vaList, szFormat);
         vsprintf(szTmp, szFormat, vaList);
-        
+       
         time_t CurTime;
         time(&CurTime);
         tm *pTime = localtime(&CurTime);
         sprintf(szOutput, "[%02d/%02d/%04d %02d:%02d:%02d] ", pTime->tm_mon+1, pTime->tm_mday, pTime->tm_year+1900, pTime->tm_hour, pTime->tm_min, pTime->tm_sec);
         strcat(szOutput, szTmp);
 
-		fprintf(fLog, "%s\n", szOutput);
-		fclose(fLog);
-	}
+      fprintf(fLog, "%s\n", szOutput);
+      fclose(fLog);
+   }
 }
 #endif
 
@@ -974,7 +983,7 @@ void DebugLog(char *szFormat, ...)
 inline bool _DataCompare(const unsigned char* pData, const unsigned char* bMask, const char* szMask)
 {
     for(;*szMask;++szMask,++pData,++bMask)
-        if(*szMask=='x' && *pData!=*bMask ) 
+        if(*szMask=='x' && *pData!=*bMask )
             return false;
     return (*szMask) == 0;
 }
@@ -984,7 +993,7 @@ unsigned long _FindPattern(unsigned long dwAddress,unsigned long dwLen,unsigned 
     for(unsigned long i=0; i < dwLen; i++)
         if(_DataCompare( (unsigned char*)( dwAddress+i ),bPattern,szMask) )
             return (unsigned long)(dwAddress+i);
-    
+   
     return 0;
 }
 // --------------------------------------------------------------------------------------
