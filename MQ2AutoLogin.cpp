@@ -711,7 +711,7 @@ void HandleWindows()
             pWnd->WndNotification(pWnd, XWM_LCLICK, 0);
         }
     }
-    else if(WindowActive("soesplash"))
+    else if(WindowActive("dbgsplash"))
     {
         CXPoint pt;
         pt.A = 1;
