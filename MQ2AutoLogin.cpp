@@ -85,7 +85,7 @@ Change log:
 #include <map>
 #include <tlhelp32.h>
 PreSetup("MQ2AutoLogin");
-#define CurrCharSelectChar 0x38E6C // see 42F530                 cmp     eax, [ecx+38E6Ch] in eqgame.exe dated oct 4 2013
+#define CurrCharSelectChar 0x38e80 // see 441A90                 cmp     eax, [ecx+38E80h] in (test) eqgame.exe dated apr 15 2015
 #define MAX_WINDOWS 150 // had to lower this for CotF patch it never reaches 200...
 
 /*** un-comment to enable debug logging ***/
