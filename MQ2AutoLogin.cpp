@@ -85,7 +85,7 @@ Change log:
 #include <map>
 #include <tlhelp32.h>
 PreSetup("MQ2AutoLogin");
-#define CurrCharSelectChar 0x38E6C // see 42F530                 cmp     eax, [ecx+38E6Ch] in eqgame.exe dated oct 4 2013
+#define CurrCharSelectChar 0x38e80 // see 441A90                 cmp     eax, [ecx+38E80h] in (test) eqgame.exe dated apr 15 2015
 #define MAX_WINDOWS 150 // had to lower this for CotF patch it never reaches 200...
 
 /*** un-comment to enable debug logging ***/
@@ -432,7 +432,7 @@ void Cmd_SwitchServer(PSPAWNINFO pChar, char *szLine)
                     strcat(szServers, ", ");
                 strcat(szServers, ServerData[n].Name);
             }
-           
+
             WriteChatColor(szServers);
             return;
         }
@@ -510,7 +510,7 @@ void Cmd_Relog(PSPAWNINFO pChar, char *szLine)
         }
 
         if(n)
-            dwTime = GetTickCount() + n;     
+            dwTime = GetTickCount() + n;
 
         strcpy(szNewChar, pChar->DisplayedName);
 
@@ -557,7 +557,7 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
 {
     if(!dwEQMainBase)
     {
-        if(DWORD n = _FindPattern(FixOffset(0x500000), 0x100000, eqmainPattern, eqmainMask))
+        if(DWORD n = _FindPattern(FixOffset(0x500000), 0x200000, eqmainPattern, eqmainMask))
         {
             n = _GetDWordAt(n, 2);
             dwEQMainBase = (DWORD*)n;
@@ -581,7 +581,7 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
             if(!bUseStationNamesInsteadOfSessions)
             {
                 char szSession[32];
-               
+
                 sprintf(szSession, "Session%d", nProcs);
                 AutoLoginDebug(szSession);
 
@@ -613,9 +613,9 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
             else // server select -> char select
             {
                 AutoLoginDebug("SetGameState(GAMESTATE_CHARSELECT): bSwitchServer = false");
-               
+
                 dwServerID = 0;
-               
+
                 if(szCharacterName[0])
                 {
                     Sleep(1000);
@@ -711,7 +711,7 @@ void HandleWindows()
             pWnd->WndNotification(pWnd, XWM_LCLICK, 0);
         }
     }
-    else if(WindowActive("soesplash"))
+    else if(WindowActive("dbgsplash"))
     {
         CXPoint pt;
         pt.A = 1;
@@ -751,7 +751,7 @@ void HandleWindows()
                     return;
                 }
             }
-           
+
             if(!szStationName[0] || !szPassword[0] || !szServerName[0])
             {
                 AutoLoginDebug("*** Login data couldn't be retrieved.  Please check your ini file.");
@@ -966,7 +966,7 @@ void DebugLog(char *szFormat, ...)
    {
         va_start(vaList, szFormat);
         vsprintf(szTmp, szFormat, vaList);
-       
+
         time_t CurTime;
         time(&CurTime);
         tm *pTime = localtime(&CurTime);
@@ -993,7 +993,7 @@ unsigned long _FindPattern(unsigned long dwAddress,unsigned long dwLen,unsigned 
     for(unsigned long i=0; i < dwLen; i++)
         if(_DataCompare( (unsigned char*)( dwAddress+i ),bPattern,szMask) )
             return (unsigned long)(dwAddress+i);
-   
+
     return 0;
 }
 // --------------------------------------------------------------------------------------
