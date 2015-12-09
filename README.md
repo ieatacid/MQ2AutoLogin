@@ -1,10 +1,13 @@
 # MQ2AutoLogin
+[![Issue Stats](http://www.issuestats.com/github/ieatacid/MQ2AutoLogin/badge/pr?style=flat-square)](http://www.issuestats.com/github/ieatacid/MQ2AutoLogin)    [![Issue Stats](http://www.issuestats.com/github/ieatacid/MQ2AutoLogin/badge/issue?style=flat-square)](http://www.issuestats.com/github/ieatacid/MQ2AutoLogin)
+
+
 MQ2AutoLogin will let you automatically log in characters and accounts simply by starting EQ with MQ2 and this plugin loaded.  [More info](http://www.macroquest2.com/phpBB3/viewtopic.php?f=50&t=16427)
 
-# Pull requests
+## Pull requests
 I'll gladly accept pull requests for bug fixes or enhancements, so please don't hesitate to do one :smirk:
 
-# License
+## License
 Licensed under the GNU General Public License (GPL) (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
 
 http://www.gnu.org/copyleft/gpl.html
